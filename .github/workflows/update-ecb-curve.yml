@@ -1,0 +1,36 @@
+name: Actualizar curva BCE
+
+on:
+  schedule:
+    - cron: "30 13 * * 1-5"   # lunes a viernes, 13:30 UTC (14:30 en Madrid)
+  workflow_dispatch:           # botón para lanzarlo a mano
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Descargar curva del BCE
+        run: |
+          mkdir -p data
+          curl -sSf -o data/ecb_raw.csv "https://data-api.ecb.europa.eu/service/data/YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_3M+SR_6M+SR_1Y+SR_2Y+SR_3Y+SR_5Y+SR_7Y+SR_10Y+SR_15Y+SR_20Y+SR_30Y?lastNObservations=1&format=csvdata"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Procesar y dibujar
+        run: |
+          pip install -e .
+          python scripts/plot_ecb_curve.py data/ecb_raw.csv
+
+      - name: Guardar en el repo si hay cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data docs
+          git diff --cached --quiet || (git commit -m "Actualizar curva BCE" && git push)
