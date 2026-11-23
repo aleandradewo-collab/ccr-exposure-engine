@@ -21,14 +21,20 @@ def parse_tenor(tenor):
     return years + months / 12
 
 
-def fetch_ecb_spot_rates(tenors=DEFAULT_TENORS, last_n=1):
-    """Descarga del BCE los tipos cupón cero de los plazos pedidos.
+def build_ecb_url(tenors=DEFAULT_TENORS, last_n=1):
+    """URL de la API del BCE para descargar los plazos pedidos en CSV."""
+    key = SERIES_PREFIX + "+".join(f"SR_{t}" for t in tenors)
+    return ECB_URL.format(key=key) + f"?lastNObservations={last_n}&format=csvdata"
 
+
+def fetch_ecb_spot_rates(tenors=DEFAULT_TENORS, last_n=1, source=None):
+    """Lee los tipos cupón cero del BCE.
+
+    source puede ser la ruta a un CSV descargado a mano desde el navegador.
+    Si es None, se descarga directamente de la API del BCE.
     Devuelve un DataFrame con columnas: date, tenor, years, rate (en decimal).
     """
-    key = SERIES_PREFIX + "+".join(f"SR_{t}" for t in tenors)
-    url = ECB_URL.format(key=key) + f"?lastNObservations={last_n}&format=csvdata"
-    raw = pd.read_csv(url)
+    raw = pd.read_csv(build_ecb_url(tenors, last_n) if source is None else source)
     df = pd.DataFrame(
         {
             "date": pd.to_datetime(raw["TIME_PERIOD"]),

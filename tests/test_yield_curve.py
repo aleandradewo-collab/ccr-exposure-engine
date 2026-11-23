@@ -1,9 +1,11 @@
+import io
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from ccr_engine.curves import YieldCurve
-from ccr_engine.ecb import curve_from_dataframe, parse_tenor
+from ccr_engine.ecb import curve_from_dataframe, fetch_ecb_spot_rates, parse_tenor
 
 
 @pytest.fixture
@@ -74,3 +76,15 @@ def test_curve_from_dataframe_usa_la_ultima_fecha():
     )
     c = curve_from_dataframe(df)
     assert c.zero_rate(1.0) == pytest.approx(0.021)
+
+
+def test_lee_csv_con_formato_del_bce():
+    # Imita las columnas que devuelve la API del BCE (en %, desordenado).
+    csv = io.StringIO(
+        "KEY,DATA_TYPE_FM,TIME_PERIOD,OBS_VALUE\n"
+        "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_5Y,SR_5Y,2026-11-20,2.5\n"
+        "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_1Y,SR_1Y,2026-11-20,2.0\n"
+    )
+    df = fetch_ecb_spot_rates(source=csv)
+    assert list(df["tenor"]) == ["1Y", "5Y"]
+    assert df["rate"].tolist() == pytest.approx([0.020, 0.025])

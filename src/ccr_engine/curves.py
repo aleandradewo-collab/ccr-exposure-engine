@@ -74,3 +74,7 @@ class YieldCurve:
         if np.any(t2 <= t1):
             raise ValueError("t2 debe ser mayor que t1")
         return (self.discount(t1) / self.discount(t2) - 1.0) / (t2 - t1)
+
+    def shifted(self, bp):
+        """Nueva curva con todos los tipos cupón cero desplazados bp puntos básicos."""
+        return YieldCurve(self.tenors, self.zero_rates + bp / 10_000)
