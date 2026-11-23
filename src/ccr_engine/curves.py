@@ -75,6 +75,13 @@ class YieldCurve:
             raise ValueError("t2 debe ser mayor que t1")
         return (self.discount(t1) / self.discount(t2) - 1.0) / (t2 - t1)
 
+    def instantaneous_forward(self, t, h=1e-4):
+        """Forward instantáneo f(0,t) = d(r·t)/dt, aproximado con una diferencia finita."""
+        t = np.asarray(t, dtype=float)
+        lo = np.maximum(t - h, 0.0)
+        hi = t + h
+        return (self._rt(hi) - self._rt(lo)) / (hi - lo)
+
     def shifted(self, bp):
         """Nueva curva con todos los tipos cupón cero desplazados bp puntos básicos."""
         return YieldCurve(self.tenors, self.zero_rates + bp / 10_000)

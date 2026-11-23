@@ -88,3 +88,7 @@ def test_lee_csv_con_formato_del_bce():
     df = fetch_ecb_spot_rates(source=csv)
     assert list(df["tenor"]) == ["1Y", "5Y"]
     assert df["rate"].tolist() == pytest.approx([0.020, 0.025])
+
+def test_forward_instantaneo_curva_plana():
+    flat = YieldCurve([1, 5, 10], [0.03, 0.03, 0.03])
+    assert flat.instantaneous_forward(np.array([0.0, 2.0, 7.0])) == pytest.approx([0.03] * 3)
