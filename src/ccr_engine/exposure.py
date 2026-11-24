@@ -71,6 +71,16 @@ def swap_values(swap, model, times, x):
     return values
 
 
+def netting_set_values(swaps, model, times, x):
+    """Valor neto de un netting set: suma de los valores de todas sus operaciones.
+
+    Con un acuerdo de netting, si la contraparte quiebra se compensan todas las
+    operaciones entre sí, así que la exposición es max(suma de V, 0) y no la suma
+    de max(V, 0) de cada operación.
+    """
+    return sum(swap_values(s, model, times, x) for s in swaps)
+
+
 @dataclass
 class ExposureProfile:
     """Perfil de exposición en cada fecha de la rejilla."""
