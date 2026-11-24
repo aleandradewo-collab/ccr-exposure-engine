@@ -5,18 +5,22 @@ from dataclasses import dataclass
 import numpy as np
 
 
-def simulation_grid(exposure_times, swaps):
-    """Rejilla de simulación: fechas de exposición más todas las fechas de fijación.
+def simulation_grid(exposure_times, swaps, mpor=0.0):
+    """Rejilla de simulación: fechas de exposición, fechas de fijación y fechas retrasadas.
 
-    Hace falta simular x(t) en cada fecha en la que se fija un cupón flotante,
-    porque el valor del swap en fechas posteriores depende de ese tipo ya fijado.
+    - Hace falta simular x(t) en cada fecha en la que se fija un cupón flotante,
+      porque el valor del swap en fechas posteriores depende de ese tipo ya fijado.
+    - Con colateral, también hace falta t - MPoR para cada fecha de exposición t:
+      el colateral disponible en t se calculó con el valor de la cartera en t - MPoR.
     """
+    exposure_times = np.asarray(exposure_times, dtype=float)
     fixing_dates = [np.concatenate([[s.start], s.payment_times()[:-1]]) for s in swaps]
-    grid = np.concatenate([[0.0], np.asarray(exposure_times, dtype=float), *fixing_dates])
+    lagged = np.maximum(exposure_times - mpor, 0.0) if mpor > 0 else np.array([])
+    grid = np.concatenate([[0.0], exposure_times, lagged, *fixing_dates])
     return np.unique(np.round(grid, 10))
 
 
-def _index_of(times, t):
+def index_of(times, t):
     """Posición de la fecha t en la rejilla (error si no está)."""
     i = np.searchsorted(times, t - 1e-9)
     if i >= len(times) or not np.isclose(times[i], t):
@@ -59,7 +63,7 @@ def swap_values(swap, model, times, x):
             i = np.argmax(alive)  # primer pago pendiente
             fixing_date, next_pay = starts[i], pay[i]
             # El cupón en curso se fijó en fixing_date: 1/P(T_(i-1), T_i) en ese escenario.
-            x_fix = x[_index_of(times, fixing_date)]
+            x_fix = x[index_of(times, fixing_date)]
             fixed_coupon_factor = 1 / model.zero_bond(fixing_date, next_pay, x_fix)
             floating = swap.notional * (
                 model.zero_bond(t, next_pay, x_t) * fixed_coupon_factor

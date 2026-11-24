@@ -8,8 +8,9 @@ Regulation (CRR).
 
 The engine simulates future market scenarios with Monte Carlo, prices a portfolio of
 derivatives on every scenario and date, and computes the exposure metrics used for risk
-limits and regulatory capital, up to the Exposure at Default (EAD) of a netting set. Every
-module is backed by the underlying theory and tested against known analytical results.
+limits and regulatory capital, including netting, collateral and the Exposure at Default
+(EAD) of a netting set. Every module is backed by the underlying theory and tested against
+known analytical results.
 
 > Built with public market data only (ECB yield curves) and public regulation (CRR, BCBS).
 > Not affiliated with any financial institution.
@@ -32,7 +33,7 @@ remaining cash flows (amortisation).*
 - [x] Exposure profiles: EE and PFE
 - [x] Regulatory metrics: EPE, Effective EE, EEPE and EAD
 - [x] Portfolios and netting sets
-- [ ] Collateral (CSA thresholds, MTA, margin period of risk)
+- [x] Collateral: CSA thresholds, MTA, initial margin and margin period of risk
 - [ ] Hull-White calibration and stressed EEPE
 - [ ] Backtesting of the exposure model
 - [ ] SA-CCR implementation and IMM vs SA-CCR capital comparison
@@ -121,6 +122,41 @@ on the full-life PFE rather than on EAD alone.
 
 ![Netting and EEPE](docs/netting_and_eepe.png)
 
+### 6. Collateral and margin period of risk
+Collateral agreements (CSAs) are modelled with a threshold `H`, a minimum transfer amount
+(MTA) and an independent amount (initial margin, IA). The variation margin held for a
+portfolio value `V` is:
+
+```
+C(V) = V − H   if V > H      (the counterparty posts)
+       0       if |V| ≤ H
+       V + H   if V < −H     (we post)
+```
+
+plus the independent amount. Collateral does not remove exposure completely, because of the
+**margin period of risk (MPoR)**: the time between the last margin call the counterparty
+honours and the close-out of the portfolio after its default (10 business days by default,
+the CRR minimum for daily-margined OTC derivatives). The collateralised exposure follows the
+classical model:
+
+```
+E(t) = max(V(t) − C(V(t − MPoR)), 0)
+```
+
+With zero threshold, exposure no longer depends on how far the market can move until `t`,
+but only on how far it can move during the MPoR, so it scales with `σ·√MPoR` and the profile
+loses its hump. Tests check the limiting cases (zero MPoR removes the exposure, an infinite
+threshold equals no collateral), that a lower threshold always lowers exposure, and the
+square-root scaling: multiplying the MPoR by 4 roughly doubles the EE. All CSAs are compared
+on the same scenarios (common random numbers), so differences come only from the agreement.
+
+![Collateral](docs/collateral_ee.png)
+
+The comparison shows that a high threshold barely reduces exposure, daily variation margin
+removes most of it, and initial margin leaves almost none. The spikes on payment dates are a
+known feature of the classical MPoR model: trade cash flows are assumed to be paid during the
+MPoR while collateral stays frozen at its last value.
+
 ## Project structure
 
 ```
@@ -134,7 +170,8 @@ ccr-exposure-engine/
 │   ├── instruments.py          # InterestRateSwap
 │   ├── hull_white.py           # HullWhite1F model
 │   ├── exposure.py             # scenario valuation, netting sets, EE and PFE
-│   └── regulatory.py           # EPE, Effective EE, EEPE and EAD (CRR Art. 284)
+│   ├── regulatory.py           # EPE, Effective EE, EEPE and EAD (CRR Art. 284)
+│   └── collateral.py           # CSA terms and collateralised exposure with MPoR
 ├── tests/                      # unit and statistical tests
 ├── scripts/                    # plots and examples
 ├── data/                       # ECB curves (updated automatically)
@@ -160,6 +197,7 @@ python scripts/price_swap.py                         # par rates and a sample sw
 python scripts/plot_hull_white.py                    # simulate and plot short-rate scenarios
 python scripts/plot_exposure.py                      # EE and PFE profile of a 5-year swap
 python scripts/portfolio_exposure.py                 # netting benefit, EEPE and EAD of a portfolio
+python scripts/collateral_exposure.py                # exposure under different collateral agreements
 ```
 
 ## Modelling assumptions and limitations
@@ -182,12 +220,19 @@ here:
   stressed calibrations, taking the higher. This depends on calibration and is on the roadmap.
 - **Default alpha:** `α = 1.4` is used; the CRR allows own estimates subject to supervisory
   approval and a floor of 1.2.
-- **Uncollateralised exposure:** collateral is not modelled yet.
+- **Simplified collateral:** the MTA is added to the threshold instead of simulating the daily
+  history of margin calls (a conservative, common approximation); thresholds are symmetric;
+  collateral is cash with no haircuts; posted collateral is assumed not to be segregated.
+- **Classical MPoR model:** all trade cash flows are assumed to be paid during the MPoR while
+  collateral is frozen, which creates exposure spikes on payment dates. More realistic models
+  of which payments are made during the MPoR are an active research topic.
 - **Interpolation:** piecewise-constant forwards cause small jumps in the model drift at curve
   pillars; a smoother scheme is a possible improvement.
 
 ## References
 
+- Andersen, L., Pykhtin, M. and Sokol, A. (2017). *Rethinking the Margin Period of Risk*.
+  Journal of Credit Risk.
 - Brigo, D. and Mercurio, F. (2006). *Interest Rate Models: Theory and Practice*. Springer.
 - Gregory, J. (2020). *The xVA Challenge*. Wiley.
 - Regulation (EU) No 575/2013 (CRR), Articles 283–294: Internal Model Method.
